@@ -8,7 +8,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -84,6 +83,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
@@ -113,15 +113,19 @@ public class SecurityConfig {
             }
 
             final String token = authHeader.substring(7);
-            final String email = jwtUtil.extractEmail(token);
 
-            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-                if (jwtUtil.validateToken(token, userDetails)) {
-                    var authToken = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+            try {
+                final String email = jwtUtil.extractEmail(token);
+                if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                    if (jwtUtil.validateToken(token, userDetails)) {
+                        var authToken = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                userDetails, null, userDetails.getAuthorities());
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    }
                 }
+            } catch (Exception e) {
+                // Token expired or invalid - continue without authentication
             }
 
             filterChain.doFilter(request, response);
